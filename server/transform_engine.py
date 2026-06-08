@@ -75,35 +75,6 @@ def apply_operation(df: pd.DataFrame, op: dict) -> pd.DataFrame:
     raise ValueError(f"不支持的操作: {action}")
 
 
-def apply_plan(raw_dir: Path, output_dir: Path, plan: dict) -> dict:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    log: list[str] = []
-    results = []
-
-    for table_file, spec in (plan.get("tables") or {}).items():
-        src_path = raw_dir / table_file
-        if not src_path.exists():
-            log.append(f"[SKIP] 文件不存在: {table_file}")
-            continue
-        df = load_table(raw_dir, table_file)
-        log.append(f"\n=== {table_file} ({len(df)} 行) ===")
-        for i, op in enumerate(spec.get("operations") or [], 1):
-            try:
-                df = apply_operation(df, op)
-                log.append(f"  {i}. {op.get('action')} OK")
-            except Exception as e:
-                log.append(f"  {i}. {op.get('action')} FAIL: {e}")
-                raise
-
-        out_name = spec.get("output") or table_file.replace(".csv", "_clean.csv")
-        out_path = output_dir / out_name
-        df.to_csv(out_path, index=False, encoding="utf-8-sig")
-        log.append(f"  → 输出 {out_name} ({len(df)} 行, {len(df.columns)} 列)")
-        results.append({"input": table_file, "output": out_name, "rows": len(df), "columns": len(df.columns)})
-
-    return {"results": results, "log": "\n".join(log)}
-
-
 def build_schema_summary(
     fields: list[dict], max_tables: int = 30, with_domain: bool = False, domain_top: int = 15
 ) -> str:

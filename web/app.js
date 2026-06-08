@@ -610,24 +610,67 @@ document.getElementById("jd-field")?.addEventListener("change", (e) => {
 });
 document.getElementById("jd-search")?.addEventListener("input", (e) => searchDomainLookup(e.target.value));
 
+// 由规则重建一张「无边标签」的简化关联图：去重边、节点用表名。
+// 边标签（join 字段）在大图里会触发 Mermaid/dagre 的几何报错，去掉后通常可正常渲染。
+function buildFallbackMermaid(rules) {
+  if (!rules || !rules.length) return "";
+  const ids = new Map();
+  let i = 0;
+  const nid = (name) => {
+    if (!ids.has(name)) ids.set(name, "N" + i++);
+    return ids.get(name);
+  };
+  const edges = new Set();
+  for (const r of rules) {
+    const L = r["左表"], R = r["右表"];
+    if (!L || !R) continue;
+    edges.add(nid(L) + "-->" + nid(R));
+  }
+  const lines = ["flowchart LR"];
+  for (const [name, id] of ids) lines.push(`  ${id}["${String(name).replace(/"/g, "")}"]`);
+  for (const e of edges) lines.push("  " + e);
+  return lines.join("\n");
+}
+
 async function renderMermaid(code) {
   const el = document.getElementById("join-mermaid");
   if (!code || !code.trim()) {
     el.innerHTML = '<div class="empty">暂无关联图</div>';
     return;
   }
-  el.innerHTML = "";
-  const pre = document.createElement("pre");
-  pre.className = "mermaid";
-  pre.textContent = code;
-  el.appendChild(pre);
-  if (window.mermaid) {
-    try {
-      mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
-      await mermaid.run({ nodes: [pre] });
-    } catch (e) {
-      el.innerHTML = `<div class="empty">图渲染失败: ${escapeHtml(e.message)}</div>`;
+  if (!window.mermaid) {
+    el.innerHTML = `<pre class="mermaid-src">${escapeHtml(code)}</pre>`;
+    return;
+  }
+  const tryRender = async (mmCode) => {
+    el.innerHTML = "";
+    const pre = document.createElement("pre");
+    pre.className = "mermaid";
+    pre.textContent = mmCode;
+    el.appendChild(pre);
+    mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+    await mermaid.run({ nodes: [pre] });
+  };
+  try {
+    await tryRender(code);
+  } catch (e1) {
+    // 降级：用规则重建无标签简化结构图再试
+    const fb = buildFallbackMermaid(joinState.rules);
+    if (fb) {
+      try {
+        await tryRender(fb);
+        const note = document.createElement("div");
+        note.className = "meta";
+        note.style.marginTop = "6px";
+        note.textContent = "（带字段标签的完整关联图渲染失败，已降级为简化结构图；字段级关联见下方规则表）";
+        el.appendChild(note);
+        return;
+      } catch (e2) {
+        /* 继续兜底 */
+      }
     }
+    el.innerHTML =
+      '<div class="empty">关联图渲染失败（节点/边过多）。完整字段级关联请见下方「关联规则表」。</div>';
   }
 }
 

@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, str(UI_ROOT / "server"))
 
 from ai_settings import get_public_settings, save_settings_from_ui, test_connection  # noqa: E402
-from ai_transformer import ai_available, generate_transform_plan, refine_plan_with_feedback  # noqa: E402
+from ai_transformer import ai_available  # noqa: E402
 from field_preprocess import (  # noqa: E402
     apply_table,
     default_output_name,
@@ -104,18 +104,6 @@ class JoinRulesPayload(BaseModel):
 
 class JoinDiscoverPayload(BaseModel):
     use_ai: bool = True
-
-
-class AIPlanRequest(BaseModel):
-    instructions: str
-
-
-class AIRefineRequest(BaseModel):
-    feedback: str
-
-
-class ApplyPlanRequest(BaseModel):
-    plan: dict | None = None
 
 
 class TableEditsPayload(BaseModel):
@@ -592,82 +580,6 @@ def api_apply_preprocess_all(x_project_id: str | None = Header(None), use_ai: bo
         except Exception as e:
             logs.append(f"[FAIL] {t['table_key']}: {e}")
     return {"results": results, "log": "\n\n".join(logs)}
-
-
-# --- Legacy AI plan (optional) ---
-@app.get("/api/ai/status")
-def api_ai_status():
-    pub = get_public_settings()
-    return {
-        "configured": pub["configured"],
-        "source": pub["source"],
-        "key_hint": pub["key_hint"],
-        "hint": "点击右上角 AI 状态打开配置向导" if not pub["configured"] else f"已配置 ({pub['key_hint']})",
-    }
-
-
-@app.get("/api/ai/plan")
-def api_get_plan(x_project_id: str | None = Header(None)):
-    pid = require_project(x_project_id)
-    return load_json_config(pid, "transform_plan.json", {"plan": None})
-
-
-@app.post("/api/ai/plan")
-def api_generate_plan(body: AIPlanRequest, x_project_id: str | None = Header(None)):
-    pid = require_project(x_project_id)
-    if not body.instructions.strip():
-        raise HTTPException(400, "请填写预处理意见")
-    fields = load_profile(pid) or profile_all_tables(raw_dir(pid))
-    meta = load_meta(pid)
-    join_rules = load_json_config(pid, "join_rules.json", {}).get("rules", [])
-    try:
-        result = generate_transform_plan(
-            instructions=body.instructions,
-            fields=fields,
-            join_rules=join_rules,
-            table_files=meta.get("files", []),
-            raw_dir=raw_dir(pid),
-        )
-    except Exception as e:
-        raise HTTPException(500, f"AI 生成失败: {e}") from e
-    save_json_config(pid, "transform_plan.json", result)
-    (config_dir(pid) / "preprocess_instructions.txt").write_text(body.instructions, encoding="utf-8")
-    return result
-
-
-@app.post("/api/ai/refine")
-def api_refine_plan(body: AIRefineRequest, x_project_id: str | None = Header(None)):
-    pid = require_project(x_project_id)
-    stored = load_json_config(pid, "transform_plan.json", {})
-    current = stored.get("plan")
-    if not current:
-        raise HTTPException(400, "请先生成清洗方案")
-    fields = load_profile(pid)
-    try:
-        result = refine_plan_with_feedback(
-            current_plan=current,
-            feedback=body.feedback,
-            fields=fields,
-        )
-    except Exception as e:
-        raise HTTPException(500, f"AI 修订失败: {e}") from e
-    save_json_config(pid, "transform_plan.json", result)
-    return result
-
-
-@app.post("/api/ai/apply")
-def api_apply_plan(body: ApplyPlanRequest, x_project_id: str | None = Header(None)):
-    pid = require_project(x_project_id)
-    stored = load_json_config(pid, "transform_plan.json", {})
-    plan = body.plan or stored.get("plan")
-    if not plan:
-        raise HTTPException(400, "无清洗方案，请先用 AI 生成")
-    try:
-        result = apply_plan(raw_dir(pid), output_dir(pid), plan)
-    except Exception as e:
-        raise HTTPException(400, str(e)) from e
-    save_json_config(pid, "last_apply_log.json", result)
-    return result
 
 
 # --- Data analysis (visualization) ---
