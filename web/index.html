@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数据质控与预处理工作台</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>数据质控 · 预处理工作台</h1>
+      <p id="project-label" class="meta">未加载项目 — 请先选择或上传数据</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="ai-badge" class="ai-badge" title="点击配置 AI">AI 未配置</button>
+    </div>
+  </header>
+
+  <!-- AI Key 配置向导 -->
+  <div id="ai-modal" class="modal hidden">
+    <div class="modal-backdrop" id="ai-modal-backdrop"></div>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2>AI API Key 配置向导</h2>
+        <button type="button" class="modal-close" id="ai-modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="wizard-steps">
+          <span class="wizard-step active" data-wstep="1">1. 选平台</span>
+          <span class="wizard-step" data-wstep="2">2. 获取 Key</span>
+          <span class="wizard-step" data-wstep="3">3. 填写测试</span>
+        </div>
+
+        <div class="wizard-pane active" id="wstep-1">
+          <p class="meta">选择您使用的 AI 平台（均兼容 OpenAI 接口格式）：</p>
+          <div class="provider-grid" id="provider-grid"></div>
+        </div>
+
+        <div class="wizard-pane" id="wstep-2">
+          <div id="provider-guide" class="provider-guide"></div>
+        </div>
+
+        <div class="wizard-pane" id="wstep-3">
+          <div class="source-form ai-form">
+            <label>API Key <span class="meta">（保存在本机 config/ai_settings.local.json，不会上传）</span></label>
+            <input type="password" id="ai-key-input" placeholder="sk-..." autocomplete="off" />
+            <label>API Base URL</label>
+            <input type="text" id="ai-base-input" placeholder="https://api.openai.com/v1" />
+            <label>模型名称</label>
+            <input type="text" id="ai-model-input" placeholder="gpt-4o-mini" />
+            <p class="meta" id="ai-env-note"></p>
+            <div class="modal-actions">
+              <button type="button" class="btn" id="btn-ai-test">测试连接</button>
+              <button type="button" class="btn btn-primary" id="btn-ai-save">保存并启用</button>
+            </div>
+            <div class="log-box" id="ai-test-log" style="margin-top:10px;max-height:80px">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="btn-wizard-prev">上一步</button>
+        <button type="button" class="btn btn-primary" id="btn-wizard-next">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="steps-nav">
+    <button class="step-tab active" data-step="0">⓪ 数据源</button>
+    <button class="step-tab" data-step="1">① Raw 质控</button>
+    <button class="step-tab" data-step="2">② 逻辑关联</button>
+    <button class="step-tab" data-step="3">③ AI 预处理</button>
+    <button class="step-tab" data-step="5">📊 数据分析</button>
+    <button class="step-tab" data-step="4">④ 导出</button>
+  </nav>
+
+  <main>
+    <!-- Step 0: Data source -->
+    <section class="panel active" id="panel-0">
+      <div class="panel-header">
+        <h2>选择 / 上传数据</h2>
+      </div>
+      <div class="source-grid">
+        <div class="card">
+          <div class="card-head">从服务器路径导入（文件夹内 CSV）</div>
+          <div class="card-body source-form">
+            <label>项目名称</label>
+            <input type="text" id="path-project-name" placeholder="可选" />
+            <label>文件夹绝对路径</label>
+            <input type="text" id="path-input" placeholder="/path/to/csv/folder" />
+            <button class="btn btn-primary" id="btn-import-path">导入文件夹</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">上传文件（CSV 或 ZIP）</div>
+          <div class="card-body source-form">
+            <label>项目名称</label>
+            <input type="text" id="upload-project-name" placeholder="可选" />
+            <label>选择文件</label>
+            <input type="file" id="file-input" multiple accept=".csv,.zip" />
+            <p class="meta">支持多个 CSV，或 ZIP 内含 CSV</p>
+            <button class="btn btn-primary" id="btn-upload">上传并创建项目</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-head">已有项目</div>
+        <div class="card-body" id="project-list"><div class="empty">暂无项目</div></div>
+      </div>
+    </section>
+
+    <!-- Step 1: Raw QC -->
+    <section class="panel" id="panel-1">
+      <div class="panel-header">
+        <h2>Raw Data 字段画像 · 类型 · 值域</h2>
+        <div>
+          <button class="btn" id="btn-scan">扫描并生成画像</button>
+          <button class="btn" id="btn-exact-stats" title="对当前表读全量，精确重算去重/缺失/值域，修正采样偏差">精确基数·本表</button>
+          <button class="btn" id="btn-export-qc">下载质控 CSV</button>
+          <button class="btn btn-primary" id="btn-save-types">保存类型配置</button>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-head">数据表</div>
+          <div class="card-body" id="table-list"></div>
+        </div>
+        <div class="card card-fields">
+          <div class="card-head card-head-toolbar">
+            <span>字段 · 类型（修改后值域自动更新）</span>
+            <input type="search" id="field-search" class="field-search" placeholder="搜索字段…" />
+          </div>
+          <div class="card-body" id="field-table-wrap"></div>
+        </div>
+        <div class="card card-domain">
+          <div class="card-head">值域预览</div>
+          <div class="card-body domain-body" id="domain-preview"><div class="empty">点击字段行查看值域</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 2 -->
+    <section class="panel" id="panel-2">
+      <div class="panel-header">
+        <h2>表间逻辑关联规则</h2>
+        <div>
+          <button class="btn" id="btn-join-probe">统计探查</button>
+          <button class="btn btn-primary" id="btn-join-ai">AI 识别关联</button>
+          <button class="btn" id="btn-save-joins">保存</button>
+        </div>
+      </div>
+      <p class="meta panel-desc" id="join-summary">AI 将结合字段画像与列值匹配率，识别住院/门诊/跨域 join 路径（参考 关联规则与示例.csv 格式）。</p>
+
+      <div class="join-layout">
+        <div class="card join-diagram-card">
+          <div class="card-head">关联路径图</div>
+          <div class="card-body join-diagram-body">
+            <div id="join-mermaid" class="join-mermaid"><div class="empty">点击「AI 识别关联」或「统计探查」生成关联图</div></div>
+          </div>
+        </div>
+        <div class="card join-side-card">
+          <div class="card-head">路径说明</div>
+          <div class="card-body" id="join-paths"><div class="empty">—</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-head">关联规则表</div>
+        <div class="card-body join-table-wrap" id="join-rules-table"><div class="empty">暂无规则</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-head">值域速查 · 改规则前先看字段长什么样（点上方规则里的字段也可跳转）</div>
+        <div class="card-body">
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+            <input id="jd-search" class="json-edit" style="min-height:auto;width:220px;padding:6px 10px" placeholder="搜字段名/表名（跨表）…" />
+            <select id="jd-table" class="json-edit" style="min-height:auto;width:auto;padding:6px 10px"></select>
+            <select id="jd-field" class="json-edit" style="min-height:auto;width:auto;padding:6px 10px"></select>
+          </div>
+          <div id="jd-domain"><div class="empty">选择表与字段查看值域</div></div>
+        </div>
+      </div>
+
+      <details class="join-json-details" style="margin-top:12px">
+        <summary class="meta">高级：编辑 JSON</summary>
+        <textarea class="json-edit" id="join-rules-edit" style="min-height:160px;margin-top:8px"></textarea>
+      </details>
+
+      <div class="log-box" id="join-log" style="margin-top:12px;max-height:120px">—</div>
+    </section>
+
+    <!-- Step 3: Field-level preprocess -->
+    <section class="panel" id="panel-3">
+      <div class="panel-header">
+        <h2>AI 预处理 · 审阅修改意见</h2>
+        <div>
+          <button class="btn btn-primary" id="btn-pre-ai-fill">AI 生成本表意见</button>
+          <button class="btn" id="btn-pre-save">保存审阅结果</button>
+          <button class="btn" id="btn-pre-preview" title="对前 20 行跑一遍变换，前后对照，不写文件">预览变更</button>
+          <button class="btn btn-primary" id="btn-pre-apply-table">确认应用本表</button>
+        </div>
+      </div>
+      <p class="meta panel-desc" id="pre-workflow-hint">
+        流程：<strong>AI 生成每列修改意见</strong> → 您审阅、编辑 → 确认后写入 <code>output/*_clean.csv</code>（raw 永不修改，output 可反复更新）。
+      </p>
+
+      <div class="pre-table-note">
+        <label class="meta">本表补充要求（可选，传给 AI）</label>
+        <input type="text" id="pre-table-note" class="field-search" style="flex:1;width:100%;margin-top:4px" placeholder="例：列名改中文；删除 PATTYPE；LIS 合并结果为单列" />
+      </div>
+
+      <div class="grid-3 pre-grid" style="margin-top:12px">
+        <div class="card">
+          <div class="card-head">数据表</div>
+          <div class="card-body" id="pre-table-list"></div>
+        </div>
+        <div class="card card-fields pre-fields-card">
+          <div class="card-head card-head-toolbar">
+            <span>字段 · 类型 · AI 修改建议（可编辑）</span>
+            <input type="search" id="pre-field-search" class="field-search" placeholder="搜索…" />
+          </div>
+          <div class="card-body" id="pre-field-wrap"><div class="empty">选择表后 AI 将自动生成修改意见</div></div>
+        </div>
+        <div class="card card-domain">
+          <div class="card-head">值域 · 审阅状态</div>
+          <div class="card-body domain-body" id="pre-status-panel"><div class="empty">选择表</div></div>
+        </div>
+      </div>
+
+      <div class="pre-footer-actions">
+        <button class="btn btn-primary" id="btn-pre-ai-fill-all">AI 生成全部表意见</button>
+        <button class="btn" id="btn-pre-apply-all">确认应用全部已审阅表</button>
+      </div>
+      <div class="log-box" id="pre-log" style="margin-top:12px;max-height:140px">—</div>
+    </section>
+
+    <!-- Step 4: Export -->
+    <section class="panel" id="panel-4">
+      <div class="panel-header">
+        <h2>导出结果</h2>
+        <button class="btn" id="btn-refresh-output">刷新列表</button>
+      </div>
+      <div class="card">
+        <div class="card-head">clean 输出文件</div>
+        <div class="card-body" id="output-list"><div class="empty">尚未生成，请先在 AI 预处理步骤应用方案</div></div>
+      </div>
+    </section>
+
+    <!-- Step 5: Data analysis (visualization) -->
+    <section class="panel" id="panel-5">
+      <div class="panel-header">
+        <h2>数据分析 · 可视化</h2>
+        <div class="an-scope-tabs">
+          <button class="btn an-scope active" data-scope="raw">Raw 数据</button>
+          <button class="btn an-scope" data-scope="output">处理后数据</button>
+          <button class="btn an-scope" data-scope="compare">对比</button>
+        </div>
+      </div>
+      <p class="meta panel-desc">选择表与列，查看类型分布、缺失率与取值分布；大表为采样估计。</p>
+
+      <div class="grid-3 pre-grid" style="margin-top:12px">
+        <div class="card">
+          <div class="card-head">数据表</div>
+          <div class="card-body" id="an-table-list"></div>
+        </div>
+        <div class="card" style="grid-column: span 2">
+          <div class="card-head card-head-toolbar">
+            <span id="an-title">概览</span>
+            <select id="an-field" class="field-search" style="width:auto"></select>
+          </div>
+          <div class="card-body" id="an-body"><div class="empty">选择数据表</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="preview-modal" class="modal hidden">
+    <div class="modal-backdrop" id="preview-modal-backdrop"></div>
+    <div class="modal-panel modal-panel-wide">
+      <div class="modal-header">
+        <h3 id="preview-title">变更预览（前 20 行）</h3>
+        <button type="button" class="modal-close" id="preview-modal-close">×</button>
+      </div>
+      <div class="modal-body" id="preview-body"><div class="empty">加载中…</div></div>
+      <div class="modal-footer">
+        <button class="btn" id="preview-cancel">关闭</button>
+        <button class="btn btn-primary" id="preview-confirm-apply">看起来没问题，确认应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/assets/vendor/mermaid.min.js"></script>
+  <script src="/assets/vendor/chart.umd.min.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

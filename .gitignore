@@ -1,0 +1,25 @@
+# --- 项目数据工作区（含大体积 raw CSV / 清洗输出 / 画像缓存，禁止入库）---
+workspaces/
+
+# --- 敏感：AI 密钥（本机配置，禁止入库）---
+config/ai_settings.local.json
+
+# --- 运行日志 / 临时 ---
+*.log
+server.log
+
+# --- Python 缓存 ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- 编辑器 / 系统 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Claude Code 本地个人设置 ---
+.claude/settings.local.json

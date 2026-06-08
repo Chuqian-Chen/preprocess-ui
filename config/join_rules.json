@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {"path": "A_住院", "step": "1-就诊枢纽", "left_table": "住院就诊信息", "left_field": "PATIENTID", "right_table": "", "right_field": "", "note": "ZYHM+ZYCS"},
+    {"path": "A_住院", "step": "2-LIS", "left_table": "住院就诊信息", "left_field": "PATIENTID", "right_table": "LIS", "right_field": "住院号加住院次", "note": "住院行"},
+    {"path": "B_门诊", "step": "1-就诊枢纽", "left_table": "门诊就诊信息", "left_field": "VISITID", "right_table": "", "right_field": "", "note": "门诊核心键"},
+    {"path": "B_门诊", "step": "2-LIS", "left_table": "门诊就诊信息", "left_field": "VISITID", "right_table": "LIS", "right_field": "门诊就诊号", "note": "门诊行"},
+    {"path": "C_跨域", "step": "桥接", "left_table": "门诊就诊信息", "left_field": "BRID", "right_table": "基本信息", "right_field": "BRID", "note": "→住院号=ZYHM"}
+  ]
+}
