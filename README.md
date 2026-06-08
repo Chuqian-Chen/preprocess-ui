@@ -19,7 +19,9 @@
 
 ### Windows（推荐）
 
-**双击 `start.bat`**：自动装依赖、起服务、打开浏览器。关闭窗口或 Ctrl+C 停止。
+**双击 `start.bat`**：自动装依赖、起服务，**等服务真正就绪后才自动打开浏览器**（不会再出现"127.0.0.1 拒绝连接"）。关闭窗口或 Ctrl+C 停止。
+
+> ⚠️ Windows 上**不要双击 `start.sh`**——它是 Linux/macOS 的 bash 脚本，双击只会用编辑器打开、不会启动服务。Windows 一律用 `start.bat`。
 
 或在 PowerShell 手动运行：
 

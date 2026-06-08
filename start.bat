@@ -19,7 +19,7 @@ echo.
 rem --- 检查 Python ---
 where python >nul 2>nul
 if errorlevel 1 (
-  echo [错误] 未找到 python，请先安装 Python 3.10+ 并加入 PATH。
+  echo [错误] 未找到 python，请先安装 Python 3.10+ 并在安装时勾选「Add to PATH」。
   echo.
   pause
   exit /b 1
@@ -34,14 +34,15 @@ if errorlevel 1 (
 
 echo [2/2] 启动服务 (端口 %PORT%)...
 echo.
-echo   浏览器打开:  http://127.0.0.1:%PORT%
-echo   停止服务:    在本窗口按 Ctrl+C，或直接关闭窗口
+echo   服务地址:  http://127.0.0.1:%PORT%
+echo   就绪后会自动打开浏览器；停止服务请按 Ctrl+C 或关闭本窗口。
 echo.
 
-rem --- 3 秒后自动打开浏览器（后台），然后前台运行服务 ---
-start "" /b cmd /c "timeout /t 3 >nul & start http://127.0.0.1:%PORT%"
+rem --- 后台轮询：等端口真正可连后再打开浏览器（避免开太早显示"拒绝连接"）---
+start "" /b powershell -NoProfile -WindowStyle Hidden -Command "$p=%PORT%; for($i=0;$i -lt 120;$i++){ try{ $c=New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1',$p); $c.Close(); Start-Process ('http://127.0.0.1:'+$p); break } catch { Start-Sleep -Milliseconds 500 } }"
 
-python -m uvicorn server.app:app --host 127.0.0.1 --port %PORT% --app-dir "%~dp0"
+rem --- 前台运行服务（工作目录已切到脚本所在目录，用 .）---
+python -m uvicorn server.app:app --host 127.0.0.1 --port %PORT% --app-dir .
 
 echo.
 echo 服务已停止。
