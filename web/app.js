@@ -1706,6 +1706,31 @@ document.getElementById("btn-ai-save").addEventListener("click", async () => {
 });
 
 // --- Init ---
+// 深链接：?project=ID&step=N&table=idx&field=idx
+// 既支持无头截图渲染"已加载"状态，也是一个可分享的定位链接功能
+async function applyDeepLink() {
+  const p = new URLSearchParams(location.search);
+  const step = p.get("step");
+  if (step === null) return;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tab = document.querySelector('.step-tab[data-step="' + step + '"]');
+  if (!tab) return;
+  tab.click();
+  await wait(500);
+  const tIdx = parseInt(p.get("table") || "", 10);
+  if (step === "1" && !isNaN(tIdx)) {
+    const items = document.querySelectorAll("#table-list .table-list-item");
+    if (items[tIdx]) items[tIdx].click();
+    await wait(400);
+    const fIdx = parseInt(p.get("field") || "0", 10);
+    const rows = document.querySelectorAll("#field-table-wrap .field-row");
+    if (rows[fIdx]) rows[fIdx].click();
+  } else if (step === "3" && !isNaN(tIdx)) {
+    const items = document.querySelectorAll("#pre-table-list .table-list-item");
+    if (items[tIdx]) items[tIdx].click();
+  }
+}
+
 async function init() {
   try {
     const health = await api("/api/health");
@@ -1716,6 +1741,10 @@ async function init() {
     state.fieldTypes = ft.types || [];
 
     await loadProjects();
+
+    // 深链接可覆盖 localStorage 里的项目
+    const urlProject = new URLSearchParams(location.search).get("project");
+    if (urlProject) state.projectId = urlProject;
 
     if (state.projectId) {
       try {
@@ -1728,6 +1757,8 @@ async function init() {
         setProject(null, null);
       }
     }
+
+    await applyDeepLink();
   } catch (e) {
     toast("后端未启动: " + e.message);
   }
